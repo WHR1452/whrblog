@@ -1,0 +1,41 @@
+import os
+import logging
+from django.conf import settings
+
+logger = logging.getLogger(__name__)
+
+# 全局插件注册表
+_loaded_plugins = []
+
+
+def load_plugins():
+    """
+    动态加载并初始化 plugins 目录下的插件.
+    This function is intended to be called when the Django app registry is ready.
+    """
+    global _loaded_plugins
+    _loaded_plugins = []
+
+    for plugin_name in settings.ACTIVE_PLUGINS:
+        plugin_path = os.path.join(settings.PLUGINS_DIR, plugin_name)
+        if os.path.isdir(plugin_path) and os.path.exists(os.path.join(plugin_path, 'plugin.py')):
+            try:
+                # 导入插件模块
+                plugin_module = __import__(f'plugins.{plugin_name}.plugin', fromlist=['plugin'])
+
+                # 获取插件实例
+                if hasattr(plugin_module, 'plugin'):
+                    plugin_instance = plugin_module.plugin
+                    _loaded_plugins.append(plugin_instance)
+                    logger.info(f"Successfully loaded plugin: {plugin_name} - {plugin_instance.PLUGIN_NAME}")
+                else:
+                    logger.warning(f"Plugin {plugin_name} does not have 'plugin' instance")
+
+            except ImportError as e:
+                logger.error(f"Failed to import plugin: {plugin_name}", exc_info=e)
+            except AttributeError as e:
+                logger.error(f"Failed to get plugin instance: {plugin_name}", exc_info=e)
+            except Exception as e:
+                logger.error(f"Unexpected error loading plugin: {plugin_name}", exc_info=e)
+
+    return _loaded_plugins
